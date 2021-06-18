@@ -1,3 +1,12 @@
+0.002   2021-06-18  Released-By: PERLANCAR; Urgency: low
+
+	- No functional changes.
+
+	- Tweak schema for path (filename instead of str).
+
+	- [doc] Tweak blurb in Description.
+
+
 0.001   2021-06-18  Released-By: PERLANCAR
 
         - First release.
