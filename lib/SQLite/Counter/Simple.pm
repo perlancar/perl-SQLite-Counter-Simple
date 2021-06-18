@@ -72,7 +72,7 @@ If you want an in-memory database (that will be destroyed after your process
 exits), use `:memory:`.
 
 _
-        schema => 'str*',
+        schema => 'filename*',
         pos => 1,
     },
 );
