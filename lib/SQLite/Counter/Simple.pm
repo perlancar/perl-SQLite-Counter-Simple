@@ -46,6 +46,13 @@ our %SPEC;
 $SPEC{':package'} = {
     v => 1.1,
     summary => 'A simple counter using SQLite',
+    description => <<'_',
+
+This module provides simple counter using SQLite as the storage. You can
+increment a counter or get the current value of a counter using a single
+function call or CLI script invocation.
+
+_
 };
 
 our %argspecs_common = (
@@ -104,12 +111,12 @@ sub increment_sqlite_counter {
 
     $dbh->begin_work;
     # XXX use prepared statement for speed
-    $dbh->do("INSERT IGNORE INTO counter (name,value) VALUES (?,?)", {}, $args{counter}, 0);
+    $dbh->do("INSERT OR IGNORE INTO counter (name,value) VALUES (?,?)", {}, $args{counter}, 0);
     my ($val) = $dbh->selectrow_array("SELECT value FROM counter WHERE name=?", {}, $args{counter});
     return [500, "Cannot create counter '$args{counter}' (1)"] unless defined $val;
     $val += ($args{increment} // 1);
     unless ($args{-dry_run}) {
-        $dbh->do("INSERT IGNORE INTO counter (name,value) VALUES (?,?)", {}, $args{counter}, 0);
+        $dbh->do("UPDATE counter SET value=? WHERE name=?", {}, $val, $args{counter});
     }
     $dbh->commit;
     [200, "OK", $val];
@@ -133,7 +140,7 @@ _
 sub get_sqlite_counter {
     my %args = @_;
 
-    my ($res, $dbh) = _connect_db(\%args);
+    my ($res, $dbh) = _init(\%args);
     return $res unless $res->[0] == 200;
 
     my ($val) = $dbh->selectrow_array("SELECT value FROM counter WHERE name=?", {}, $args{counter});
