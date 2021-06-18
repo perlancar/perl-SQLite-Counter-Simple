@@ -48,9 +48,11 @@ $SPEC{':package'} = {
     summary => 'A simple counter using SQLite',
     description => <<'_',
 
-This module provides simple counter using SQLite as the storage. You can
-increment a counter or get the current value of a counter using a single
-function call or CLI script invocation.
+This module provides simple counter using SQLite as the storage. The logic is
+simple; this module just uses row of a table to store a counter. You can
+implement this yourself, but this module provides the convenience of
+incrementing or getting the value of a counter using a single function call or
+a single CLI script invocation.
 
 _
 };
