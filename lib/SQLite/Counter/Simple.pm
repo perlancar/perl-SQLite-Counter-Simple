@@ -58,11 +58,6 @@ _
 };
 
 our %argspecs_common = (
-    counter => {
-        summary => 'Counter name, defaults to "default" if not specified',
-        schema => 'str*',
-        pos => 0,
-    },
     path => {
         summary => 'Database path',
         description => <<'_',
@@ -76,6 +71,14 @@ exits), use `:memory:`.
 _
         schema => 'filename*',
         pos => 1,
+    },
+);
+
+our %argspec_counter = (
+    counter => {
+        summary => 'Counter name, defaults to "default" if not specified',
+        schema => 'str*',
+        pos => 0,
     },
 );
 
@@ -112,6 +115,7 @@ counter been incremented, but the counter will not be actually incremented.
 _
     args => {
         %argspecs_common,
+        %argspec_counter,
         increment => {
             summary => 'Specify by how many should the counter be incremented',
             schema => 'int*',
@@ -132,6 +136,33 @@ sub increment_sqlite_counter {
     _increment($dbh, $args{counter}, $args{increment}, $args{-dry_run});
 }
 
+$SPEC{dump_sqlite_counters} = {
+    v => 1.1,
+    summary => 'Return all the counters in a SQLite database as a hash',
+    description => <<'_',
+_
+    args => {
+        %argspecs_common,
+    },
+    features => {
+        dry_run => 1,
+    },
+};
+sub dump_sqlite_counters {
+    my %args = @_;
+
+    my ($res, $dbh) = _init(\%args);
+    return $res unless $res->[0] == 200;
+
+    my $sth = $dbh->prepare("SELECT name,value FROM counter");
+    $sth->execute;
+    my %counters;
+    while (my $row = $sth->fetchrow_hashref) {
+        $counters{$row->{name}} = $row->{value};
+    }
+    [200, "OK", \%counters];
+}
+
 $SPEC{get_sqlite_counter} = {
     v => 1.1,
     summary => 'Get the current value of a counter in a SQLite database',
@@ -142,6 +173,7 @@ Undef (exit code 1 in CLI) can be returned if counter does not exist.
 _
     args => {
         %argspecs_common,
+        %argspec_counter,
     },
     features => {
         dry_run => 1,
