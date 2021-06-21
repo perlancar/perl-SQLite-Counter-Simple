@@ -79,6 +79,24 @@ _
     },
 );
 
+sub _increment {
+    my ($dbh, $counter, $increment, $dry_run) = @_;
+
+    $increment //= 1;
+
+    $dbh->begin_work;
+    # XXX use prepared statement for speed
+    $dbh->do("INSERT OR IGNORE INTO counter (name,value) VALUES (?,?)", {}, $counter, 0);
+    my ($val) = $dbh->selectrow_array("SELECT value FROM counter WHERE name=?", {}, $counter);
+    return [500, "Cannot create counter '$counter' (1)"] unless defined $val;
+    $val += $increment;
+    unless ($dry_run) {
+        $dbh->do("UPDATE counter SET value=? WHERE name=?", {}, $val, $counter);
+    }
+    $dbh->commit;
+    [200, "OK", $val];
+}
+
 $SPEC{increment_sqlite_counter} = {
     v => 1.1,
     summary => 'Increment a counter in a SQLite database and return the new incremented value',
@@ -111,17 +129,7 @@ sub increment_sqlite_counter {
     my ($res, $dbh) = _init(\%args);
     return $res unless $res->[0] == 200;
 
-    $dbh->begin_work;
-    # XXX use prepared statement for speed
-    $dbh->do("INSERT OR IGNORE INTO counter (name,value) VALUES (?,?)", {}, $args{counter}, 0);
-    my ($val) = $dbh->selectrow_array("SELECT value FROM counter WHERE name=?", {}, $args{counter});
-    return [500, "Cannot create counter '$args{counter}' (1)"] unless defined $val;
-    $val += ($args{increment} // 1);
-    unless ($args{-dry_run}) {
-        $dbh->do("UPDATE counter SET value=? WHERE name=?", {}, $val, $args{counter});
-    }
-    $dbh->commit;
-    [200, "OK", $val];
+    _increment($dbh, $args{counter}, $args{increment}, $args{-dry_run});
 }
 
 $SPEC{get_sqlite_counter} = {
@@ -148,6 +156,44 @@ sub get_sqlite_counter {
     my ($val) = $dbh->selectrow_array("SELECT value FROM counter WHERE name=?", {}, $args{counter});
     [200, "OK", $val, {'cmdline.exit_code'=>defined $val ? 0:1}];
 }
+
+sub new {
+    my ($class, %args) = @_;
+
+    my ($res, $dbh) = _init(\%args);
+    die "Can't initialize: $res->[0] - $res->[1]" unless $res->[0] == 200;
+
+    my $obj = {
+        path => delete $args{path},
+        dbh  => $dbh,
+    };
+
+    delete $args{counter};
+    keys(%args) and die "Unknown constructor argument(s): ".join(", ", sort keys %args);
+    bless $obj, $class;
+}
+
+sub increment {
+    my ($self, %args) = @_;
+
+    my $counter = delete($args{counter}) // 'default';
+    my $increment = delete($args{increment});
+    keys(%args) and die "Unknown argument(s): ".join(", ", sort keys %args);
+    my $res = _increment($self->{dbh}, $counter, $increment); # doesn't support dry-run
+    die "Can't increment counter '$counter': $res->[0] - $res->[1]"
+        unless $res->[0] == 200;
+    $res->[2];
+}
+
+sub get {
+    my ($self, %args) = @_;
+
+    my $counter = delete($args{counter}) // 'default';
+    keys(%args) and die "Unknown argument(s): ".join(", ", sort keys %args);
+    my ($val) = $self->{dbh}->selectrow_array("SELECT value FROM counter WHERE name=?", {}, $counter);
+    $val;
+}
+
 
 1;
 # ABSTRACT:
@@ -194,6 +240,69 @@ From command-line (install L<App::SQLiteCounterSimpeUtils>):
  1
  % increment-sqlite-counter ~/myapp.db counter1 -i 10
  11
+
+
+=head1 METHODS
+
+Aside from the functional interface, this module also provides the OO interface.
+
+=head2 new
+
+Constructor.
+
+Usage:
+
+ my $counter = SQLite::Counter::Simple->new(%args);
+
+Known arguments (C<*> marks required argument):
+
+=over
+
+=item * path
+
+Database path, defaults to C<$HOME/counter.db>.
+
+=back
+
+=head2 increment
+
+Increment counter.
+
+Usage:
+
+ my $newval = $counter->increment(%args);
+
+Arguments:
+
+=over
+
+=item * counter
+
+Counter name, defaults to C<default>.
+
+=item * increment
+
+Increment, defaults to 1.
+
+=back
+
+=head2 get
+
+Get current value of a counter.
+
+Usage:
+
+ my $val = $counter->get(%args);
+
+Arguments:
+
+=over
+
+=item * counter
+
+Counter name, defaults to C<default>.
+
+=back
 
 
 =head1 SEE ALSO
